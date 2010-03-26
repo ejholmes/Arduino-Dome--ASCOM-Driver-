@@ -231,7 +231,6 @@ namespace ASCOM.Arduino
 
         private bool ConnectDome()
         {
-            System.Windows.Forms.MessageBox.Show("Here");
             SerialConnection = new ArduinoSerial(this.ProcessQueue);
             SerialConnection.Parity = Parity.None;
             SerialConnection.PortName = this.ComPort;
