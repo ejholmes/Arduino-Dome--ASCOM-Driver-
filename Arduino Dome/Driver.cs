@@ -59,6 +59,10 @@ namespace ASCOM.Arduino
 
         private bool IParked = false;
 
+        private bool ISlaved = false;
+
+        private bool Synced = false;
+
         private double IAzimuth = 0;
         private double IParkPosition = 0;
 
@@ -260,6 +264,12 @@ namespace ASCOM.Arduino
                     case "SHUTTER":
                         this.IShutterStatus = (com_args[1] == "OPEN")?ShutterState.shutterOpen:ShutterState.shutterClosed;
                         break;
+                    case "SYNCED":
+                        this.Synced = true;
+                        break;
+                    case "PARKED":
+                        this.IParked = true;
+                        break;
                     default:
                         break;
                 }
@@ -275,12 +285,12 @@ namespace ASCOM.Arduino
 
         public string Description
         {
-            get { throw new PropertyNotImplementedException("Description", false); }
+            get { return ""; }
         }
 
         public string DriverInfo
         {
-            get { throw new PropertyNotImplementedException("DriverInfo", false); }
+            get { return ""; }
         }
 
         public void FindHome()
@@ -290,12 +300,12 @@ namespace ASCOM.Arduino
 
         public short InterfaceVersion
         {
-            get { throw new PropertyNotImplementedException("InterfaceVersion", false); }
+            get { return 1; }
         }
 
         public string Name
         {
-            get { throw new PropertyNotImplementedException("Name", false); }
+            get { return "Arduino Dome"; }
         }
 
         public void OpenShutter()
@@ -333,8 +343,8 @@ namespace ASCOM.Arduino
 
         public bool Slaved
         {
-            get { throw new PropertyNotImplementedException("Slaved", false); }
-            set { throw new PropertyNotImplementedException("Slaved", true); }
+            get { return this.ISlaved; }
+            set { this.ISlaved = value; }
         }
 
         public void SlewToAltitude(double Altitude)
@@ -344,6 +354,8 @@ namespace ASCOM.Arduino
 
         public void SlewToAzimuth(double Azimuth)
         {
+            if (Azimuth > 360 || Azimuth < 0)
+                throw new Exception("Out of range");
             this.IIsSlewing = true;
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.Slew, Azimuth);
 
@@ -358,7 +370,13 @@ namespace ASCOM.Arduino
 
         public void SyncToAzimuth(double Azimuth)
         {
+            this.Synced = false;
+            if (Azimuth > 360 || Azimuth < 0)
+                throw new Exception("Out of range");
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.SyncToAzimuth, Azimuth);
+
+            while (!this.Synced)
+                HC.WaitForMilliseconds(100);
         }
 
         #endregion
