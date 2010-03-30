@@ -28,8 +28,7 @@ using System.IO;
 using System.IO.Ports;
 
 using ASCOM;
-using ASCOM.Helper;
-using ASCOM.Helper2;
+using ASCOM.Utilities;
 using ASCOM.Interface;
 
 namespace ASCOM.Arduino
@@ -51,30 +50,11 @@ namespace ASCOM.Arduino
         public static string s_csDriverID = "ASCOM.Arduino.Dome";
         public static string s_csDriverDescription = "Arduino Dome";
 
-        private string ComPort = "COM4";
-
-        private bool Link = false;
-
-        private bool IIsSlewing = false;
-
-        private bool IParked = false;
-
-        private bool ISlaved = false;
-
-        private bool Synced = false;
-
-        private double IAzimuth = 0;
-        private double IParkPosition = 0;
-
-        private ShutterState IShutterStatus = ShutterState.shutterClosed;
-
         private ArduinoSerial SerialConnection;
 
-        private Profile IProfile = new Profile();
+        private Util HC = new Util();
 
-        private ASCOM.Utilities.Util HC = new ASCOM.Utilities.Util();
-
-        
+        private Config Config = new Config();
 
         //
         // Constructor - Must be public for COM registration!
@@ -141,12 +121,12 @@ namespace ASCOM.Arduino
 
         public bool AtPark
         {
-            get { return this.IParked; }
+            get { return this.Config.Parked; }
         }
 
         public double Azimuth
         {
-            get { return this.IAzimuth; }
+            get { return this.Config.Azimuth; }
         }
 
         public bool CanFindHome
@@ -191,10 +171,10 @@ namespace ASCOM.Arduino
 
         public void CloseShutter()
         {
-            this.IShutterStatus = ShutterState.shutterClosing;
+            this.Config.ShutterStatus = ShutterState.shutterClosing;
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.CloseShutter);
 
-            while (this.IShutterStatus == ShutterState.shutterClosed)
+            while (this.Config.ShutterStatus == ShutterState.shutterClosed)
                 HC.WaitForMilliseconds(100);
         }
 
@@ -218,16 +198,16 @@ namespace ASCOM.Arduino
 
         public bool Connected
         {
-            get { return this.Link; }
+            get { return this.Config.Link; }
             set 
             {
                 switch(value)
                 {
                     case true:
-                        this.Link = this.ConnectDome();
+                        this.Config.Link = this.ConnectDome();
                         break;
                     case false:
-                        this.Link = !this.DisconnectDome();
+                        this.Config.Link = !this.DisconnectDome();
                         break;
                 }
             }
@@ -235,19 +215,14 @@ namespace ASCOM.Arduino
 
         private bool ConnectDome()
         {
-            SerialConnection = new ArduinoSerial(this.ProcessQueue);
-            SerialConnection.Parity = Parity.None;
-            SerialConnection.PortName = this.ComPort;
-            SerialConnection.StopBits = StopBits.One;
-            SerialConnection.BaudRate = 9600;
-
-            SerialConnection.Open();
+            SerialConnection = new ArduinoSerial();
+            SerialConnection.CommandQueueReady += new ArduinoSerial.CommandQueueReadyEventHandler(SerialConnection_CommandQueueReady);
             HC.WaitForMilliseconds(2000);
 
             return true;
         }
 
-        private void ProcessQueue()
+        void SerialConnection_CommandQueueReady(object sender, EventArgs e)
         {
             while (SerialConnection.CommandQueue.Count > 0)
             {
@@ -258,17 +233,17 @@ namespace ASCOM.Arduino
                 switch (command)
                 {
                     case "P":
-                        this.IAzimuth = Int32.Parse(com_args[1]);
-                        this.IIsSlewing = false;
+                        this.Config.Azimuth = Int32.Parse(com_args[1]);
+                        this.Config.IsSlewing = false;
                         break;
                     case "SHUTTER":
-                        this.IShutterStatus = (com_args[1] == "OPEN")?ShutterState.shutterOpen:ShutterState.shutterClosed;
+                        this.Config.ShutterStatus = (com_args[1] == "OPEN") ? ShutterState.shutterOpen : ShutterState.shutterClosed;
                         break;
                     case "SYNCED":
-                        this.Synced = true;
+                        this.Config.Synced = true;
                         break;
                     case "PARKED":
-                        this.IParked = true;
+                        this.Config.Parked = true;
                         break;
                     default:
                         break;
@@ -310,10 +285,10 @@ namespace ASCOM.Arduino
 
         public void OpenShutter()
         {
-            this.IShutterStatus = ShutterState.shutterOpening;
+            this.Config.ShutterStatus = ShutterState.shutterOpening;
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.OpenShutter);
 
-            while (this.IShutterStatus == ShutterState.shutterOpening)
+            while (this.Config.ShutterStatus == ShutterState.shutterOpening)
                 HC.WaitForMilliseconds(100);
         }
 
@@ -321,13 +296,13 @@ namespace ASCOM.Arduino
         {
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.Park);
 
-            while (!this.IParked)
+            while (!this.Config.Parked)
                 HC.WaitForMilliseconds(100);
         }
 
         public void SetPark()
         {
-            this.IParkPosition = this.IAzimuth;
+            this.Config.ParkPosition = this.Config.Azimuth;
         }
 
         public void SetupDialog()
@@ -338,13 +313,13 @@ namespace ASCOM.Arduino
 
         public ShutterState ShutterStatus
         {
-            get { return this.IShutterStatus; }
+            get { return this.Config.ShutterStatus; }
         }
 
         public bool Slaved
         {
-            get { return this.ISlaved; }
-            set { this.ISlaved = value; }
+            get { return this.Config.Slaved; }
+            set { this.Config.Slaved = value; }
         }
 
         public void SlewToAltitude(double Altitude)
@@ -356,26 +331,26 @@ namespace ASCOM.Arduino
         {
             if (Azimuth > 360 || Azimuth < 0)
                 throw new Exception("Out of range");
-            this.IIsSlewing = true;
+            this.Config.IsSlewing = true;
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.Slew, Azimuth);
 
-            while (this.IIsSlewing)
+            while (this.Config.IsSlewing)
                 HC.WaitForMilliseconds(100);
         }
 
         public bool Slewing
         {
-            get { return this.IIsSlewing; }
+            get { return this.Config.IsSlewing; }
         }
 
         public void SyncToAzimuth(double Azimuth)
         {
-            this.Synced = false;
+            this.Config.Synced = false;
             if (Azimuth > 360 || Azimuth < 0)
                 throw new Exception("Out of range");
             SerialConnection.SendCommand(ArduinoSerial.SerialCommand.SyncToAzimuth, Azimuth);
 
-            while (!this.Synced)
+            while (!this.Config.Synced)
                 HC.WaitForMilliseconds(100);
         }
 
